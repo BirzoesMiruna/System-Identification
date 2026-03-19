@@ -1,0 +1,143 @@
+%%
+% Nume si prenume: Birzoes Miruna
+%
+clearvars
+clc
+%% Magic numbers (replace with received numbers)
+m = 2; 
+n = 1; 
+
+%% Process data (fixed, do not modify)
+c1 = (1000+n*300)/10000;
+c2 = (1.15+2*(m+n/10)/20);
+a1 = 2*c2*c1;
+a2 = c1;
+b0 = (1.2+m+n)/5.5;
+
+rng(m+10*n)
+x0_slx = [2*(m/2+rand(1)*m/5); m*(n/20+rand(1)*n/100)];
+
+%% Experiment setup (fixed, do not modify)
+Ts = 10*c2/c1/1e4*1.5; % fundamental step size
+Tfin = 30*c2/c1*10; % simulation duration
+
+gain = 10;
+umin = 0; umax = gain; % input saturation
+ymin = 0; ymax = b0*gain/1.5; % output saturation
+
+whtn_pow_in = 1e-6*5*(((m-1)*8+n/2)/5)/2*6/8; % input white noise power and sampling time
+whtn_Ts_in = Ts*3;
+whtn_seed_in = 23341+m+2*n;
+q_in = (umax-umin)/pow2(10); % input quantizer (DAC)
+
+whtn_pow_out = 1e-5*5*(((m-1)*25+n/2)/5)*6/80*(0.5+0.3*(m-2)); % output white noise power and sampling time
+whtn_Ts_out = Ts*5;
+whtn_seed_out = 23342-m-2*n;
+q_out = (ymax-ymin)/pow2(9); % output quantizer (ADC)
+
+u_op_region = (m/2+n/5)/2; % operating point
+
+%% Input setup (can be changed/replaced/deleted)
+
+wf=1/18.7886 %wf=1/T1, T1 usor de citit aproximativ din rasp la treapta (y63)
+fmin=wf/2/pi/10;
+fmax=wf/2/pi*10;
+Ain=0.55; 
+%1.68;  % valoare arbitrara, suficient de mare
+%u0 = 0;     % fixed
+%ust = 4*m;  % must be modified (saturation)
+%t1 = 12/a1; % recommended 
+
+%% Data acquisition (use t, u, y to perform system identification)
+out = sim("circuit_hidraulic_R2022b0x2810x292.slx");
+
+t = out.tout;
+u = out.u;
+y = out.y;
+
+plot(t,u,t,y)
+shg
+
+%% System identification
+%yst=  (0.507102+0.397727)/2; %0.417614
+%ust= (1.16211+0.0488281)/2; %=0.0390625
+
+yst=  (0.497159+0.40767)/2; 
+ust= (1.16211+0.0488281)/2; 
+K= yst/ust; % =0.7472
+
+
+
+%%
+w1=pi/(906.498-887.714)
+DeltaT1=897.569-887.714
+phi1=rad2deg(-w1*DeltaT1) %=-94.4368
+
+%%
+
+w2=pi/(866.31-843.807)
+DeltaT2=855.78-843.807
+phi2=rad2deg(-w2*DeltaT2) %=-95.7712
+
+%%
+w3=pi/(945.932-926.882)
+DeltaT3=939.404-926.882
+phi3=rad2deg(-w3*DeltaT3) %=-118.3181
+
+%%
+w4=pi/(866.325-844.576)
+DeltaT4=855.466-844.576
+phi4=rad2deg(-w4*DeltaT4) %bun =-90.1905
+
+%%
+w5=pi/(905.98-886.474)
+DeltaT5=898.447-885.474
+phi5=rad2deg(-w5*DeltaT5)%=-110
+
+%%
+w6=pi/(945.121-926.615)
+DeltaT6=938.102-926.615
+phi6=rad2deg(-w6*DeltaT6) %nou =-111
+
+%%
+w7=pi/(907.627-887.682)
+DeltaT7=898.008-887.682
+phi7=rad2deg(-w7*DeltaT7)%-98.7819
+
+%%
+Ay=(0.616477-0.298295)/2%=0.1591  %amplitudinea lui y. =0.1591
+Au=(1.16211-0.0292969)/2 % =0.5664;
+Mr=Ay/Au; %=0.2809
+Im=-Mr; %=-0.2809
+
+%%
+
+wn=w4%=0.1444 
+zeta=-K/2/Im  %=1.3301
+
+%%
+H=tf(K*wn^2,[1,2*zeta*wn,wn^2])
+ysim=lsim(H,u,t);
+figure;
+plot(t,u,t,y,t,ysim);
+zpk(H)
+%%
+T1=1/0.06544;
+T2=1/0.3188
+%K=0.7598 % din proiect 2
+%K=0.76 %da bine, eroare 7.8801 dar K este pus la nimereala
+%%
+A=[0,1;-1/T1/T2,-(1/T1+1/T2)];
+ B=[0;K/T1/T2];
+ C=[1,0];
+ D= 0;
+ sys=ss(A,B,C,D);
+
+ ysim2=lsim(sys,u,t,[y(1),0.23]);  % ultima val se modifica a.i. eroarea sa fie cat mai mica
+
+ figure
+ plot(t,u,t,y,t,ysim2)
+
+ 
+ J=1/sqrt(length(t))*norm(y-ysim2)
+ eMPN=norm(y-ysim2)/norm(y-mean(y))*100;
